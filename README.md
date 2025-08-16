@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Advanced Load Tester
 
 Next-Generation Load Testing Framework with Node.js + optional Python bridge for ML/AI analytics and a real‑time dashboard.
@@ -141,3 +142,6 @@ If you need the Python bridge in the same container, use a multi-stage or base i
 ## License
 
 MIT
+=======
+# Advanced-Load-tester
+>>>>>>> 3d06c8935ed6db13503ddbe4635cb4226cb8338c
