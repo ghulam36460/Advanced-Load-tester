@@ -1,0 +1,10 @@
+{
+  "framework": "other",
+  "buildCommand": "npm ci --omit=dev && node scripts/write-dashboard-config.js",
+  "outputDirectory": "dashboard",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  }
+}

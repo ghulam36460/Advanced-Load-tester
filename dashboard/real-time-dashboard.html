@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Advanced Load Tester - Real-time Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+  <!-- Optional runtime config for API/WS base; defaults to current origin -->
+  <script src="config.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #2d3748;
+        line-height: 1.6;
+        min-height: 100vh;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        color: #2d3748;
+        padding: 1rem 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        border-bottom: 3px solid #667eea;
+      }
+
+      .header h1 {
+        font-size: 2rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .header .subtitle {
+        opacity: 0.8;
+        font-size: 1rem;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      }
+
+      .card-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-label {
+        color: #718096;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .controls {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.875rem 1.75rem;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        margin-right: 0.75rem;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .button:active {
+        transform: translateY(0);
+      }
+
+      .button.secondary {
+        background: rgba(226, 232, 240, 0.8);
+        color: #4a5568;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .button.danger {
+        background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+        box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
+      }
+
+      .input-group {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        align-items: end;
+      }
+
+      .input-field {
+        flex: 1;
+      }
+
+      .input-field label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #4a5568;
+      }
+
+      .input-field input,
+      .input-field select {
+        width: 100%;
+        padding: 0.875rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .input-field input:focus,
+      .input-field select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .targets-container {
+        background: rgba(248, 250, 252, 0.8);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .target-card {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+      }
+
+      .target-card:hover {
+        background: rgba(255, 255, 255, 1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .target-info {
+        flex: 1;
+      }
+
+      .target-url {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 0.25rem;
+      }
+
+      .target-type {
+        font-size: 0.8rem;
+        color: #718096;
+        text-transform: uppercase;
+        background: #e2e8f0;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        display: inline-block;
+      }
+
+      .chart-container {
+        position: relative;
+        height: 300px;
+        margin-top: 1rem;
+      }
+
+      .test-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-left: 4px solid #667eea;
+        transition: all 0.3s ease;
+      }
+
+      .test-card.running {
+        border-left-color: #48bb78;
+        background: linear-gradient(
+          135deg,
+          rgba(72, 187, 120, 0.1) 0%,
+          rgba(255, 255, 255, 0.95) 50%
+        );
+      }
+
+      .test-card.completed {
+        border-left-color: #4299e1;
+      }
+
+      .test-card.error {
+        border-left-color: #f56565;
+        background: linear-gradient(
+          135deg,
+          rgba(245, 101, 101, 0.1) 0%,
+          rgba(255, 255, 255, 0.95) 50%
+        );
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: rgba(226, 232, 240, 0.8);
+        border-radius: 4px;
+        margin: 1rem 0;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #48bb78, #38a169);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+        position: relative;
+      }
+
+      .progress-fill.pulsing {
+        animation: pulse-progress 2s infinite;
+      }
+
+      .progress-fill.pulsing::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.4),
+          transparent
+        );
+        animation: shimmer 2s infinite;
+      }
+
+      @keyframes pulse-progress {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.8;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes shimmer {
+        0% {
+          left: -100%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+
+      .connection-status {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 600;
+        z-index: 1000;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+      }
+
+      .connection-status.connected {
+        background: rgba(72, 187, 120, 0.9);
+      }
+
+      .connection-status.disconnected {
+        background: rgba(245, 101, 101, 0.9);
+      }
+
+      .notification {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        border-left: 4px solid #48bb78;
+        z-index: 1000;
+        transform: translateX(400px);
+        transition: transform 0.3s ease;
+        max-width: 350px;
+      }
+
+      .notification.show {
+        transform: translateX(0);
+      }
+
+      .notification.error {
+        border-left-color: #f56565;
+      }
+
+      .advanced-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 8px;
+        transition: all 0.2s ease;
+      }
+
+      .checkbox-group:hover {
+        background: rgba(255, 255, 255, 1);
+      }
+
+      .checkbox-group input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #667eea;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+      }
+
+      .status-running {
+        background: #48bb78;
+      }
+      .status-stopped {
+        background: #ed8936;
+      }
+      .status-error {
+        background: #f56565;
+      }
+      .status-idle {
+        background: #a0aec0;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #718096;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 12px;
+        margin: 2rem 0;
+      }
+
+      .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 1rem;
+        }
+
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .input-group {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🚀 Advanced Load Tester</h1>
+      <p class="subtitle">
+        Real-time Performance Monitoring & Multi-Target Load Testing
+      </p>
+    </div>
+
+    <div class="connection-status disconnected" id="connectionStatus">
+      Connecting...
+    </div>
+
+    <div class="container">
+      <!-- Test Configuration -->
+      <div class="controls">
+        <h3 style="margin-bottom: 1.5rem; font-size: 1.4rem">
+          🎯 Load Test Configuration
+        </h3>
+
+        <!-- Target Management -->
+        <div class="targets-container">
+          <h4 style="margin-bottom: 1rem; color: #4a5568">Target URLs</h4>
+          <div class="input-group">
+            <div class="input-field">
+              <label for="testType">Test Type</label>
+              <select id="testType">
+                <option value="http">HTTP/HTTPS Load Test</option>
+                <option value="websocket">WebSocket Test</option>
+                <option value="graphql">GraphQL Test</option>
+                <option value="grpc">gRPC Test</option>
+                <option value="browser">Browser Automation Test</option>
+              </select>
+            </div>
+            <div class="input-field">
+              <label for="targetUrl">Target URL *</label>
+              <input
+                type="url"
+                id="targetUrl"
+                placeholder="https://example.com/api"
+                required
+              />
+            </div>
+            <div class="input-field">
+              <label for="requestMethod">Method</label>
+              <select id="requestMethod">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+                <option value="PATCH">PATCH</option>
+                <option value="HEAD">HEAD</option>
+                <option value="OPTIONS">OPTIONS</option>
+              </select>
+            </div>
+            <div style="align-self: end">
+              <button class="button secondary" onclick="addTarget()">
+                ➕ Add Target
+              </button>
+            </div>
+          </div>
+
+          <!-- Target List -->
+          <div id="targetsList" style="margin-top: 1rem">
+            <div class="empty-state">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem">🎯</div>
+              <p>No targets added yet. Add a target URL to get started.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Test Parameters -->
+        <div style="margin-bottom: 1.5rem">
+          <h4 style="margin-bottom: 1rem; color: #4a5568">
+            ⚙️ Test Parameters
+          </h4>
+          <div class="input-group">
+            <div class="input-field">
+              <label for="workers">Concurrent Workers</label>
+              <input type="number" id="workers" value="10" min="1" max="1000" />
+            </div>
+            <div class="input-field">
+              <label for="duration">Duration (seconds)</label>
+              <input
+                type="number"
+                id="duration"
+                value="60"
+                min="1"
+                max="3600"
+              />
+            </div>
+            <div class="input-field">
+              <label for="rps">Requests/Second</label>
+              <input type="number" id="rps" value="10" min="1" max="10000" />
+            </div>
+            <div class="input-field">
+              <label for="rampUp">Ramp Up (seconds)</label>
+              <input type="number" id="rampUp" value="30" min="0" max="600" />
+            </div>
+            <div class="input-field">
+              <label for="rampDown">Ramp Down (seconds)</label>
+              <input type="number" id="rampDown" value="15" min="0" max="600" />
+            </div>
+            <div class="input-field">
+              <label for="timeout">Request Timeout (seconds)</label>
+              <input type="number" id="timeout" value="30" min="1" max="300" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Options -->
+        <div style="margin-bottom: 1.5rem">
+          <h4 style="margin-bottom: 1rem; color: #4a5568">
+            🔧 Advanced Options
+          </h4>
+          <div class="advanced-options">
+            <div class="checkbox-group">
+              <input type="checkbox" id="useProxies" />
+              <label for="useProxies">🌐 Use Proxy Rotation</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="humanBehavior" checked />
+              <label for="humanBehavior">🤖 Human Behavior Simulation</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="browserMode" />
+              <label for="browserMode">🌐 Browser Automation</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="antiDetection" checked />
+              <label for="antiDetection">🛡️ Anti-Detection</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="enableRetries" checked />
+              <label for="enableRetries">🔄 Auto Retries</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="keepAlive" checked />
+              <label for="keepAlive">⚡ Keep-Alive Connections</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div style="margin-top: 2rem; text-align: center">
+          <button
+            class="button"
+            onclick="startMultipleTests()"
+            style="font-size: 1rem; padding: 1rem 2rem"
+          >
+            🚀 Start Load Test
+          </button>
+          <button class="button danger" onclick="stopAllTests()">
+            ⏹️ Stop All Tests
+          </button>
+          <button class="button secondary" onclick="clearTargets()">
+            🗑️ Clear Targets
+          </button>
+          <button class="button secondary" onclick="exportConfig()">
+            📤 Export Config
+          </button>
+          <button class="button secondary" onclick="importConfig()">
+            📥 Import Config
+          </button>
+        </div>
+      </div>
+
+      <!-- Overall Metrics -->
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-title">🚀 Active Tests</div>
+          <div class="metric-value" id="activeTests">0</div>
+          <div class="metric-label">Running Now</div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Total Requests</div>
+          <div class="metric-value" id="totalRequests">0</div>
+          <div class="metric-label">Sent</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚡ Avg Response Time</div>
+          <div class="metric-value" id="avgResponseTime">0</div>
+          <div class="metric-label">Milliseconds</div>
+        </div>
+        <div class="card">
+          <div class="card-title">❌ Error Rate</div>
+          <div class="metric-value" id="errorRate">0%</div>
+          <div class="metric-label">Percentage</div>
+        </div>
+      </div>
+
+      <!-- Real-time Charts -->
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-title">📈 Requests Per Second</div>
+          <div class="chart-container">
+            <canvas id="rpsChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">⏱️ Response Time</div>
+          <div class="chart-container">
+            <canvas id="responseTimeChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔗 Active Connections</div>
+          <div class="chart-container">
+            <canvas id="connectionsChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">💾 System Resources</div>
+          <div class="chart-container">
+            <canvas id="systemChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Tests -->
+      <div id="testsContainer" style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem; color: #2d3748">
+          🧪 Active Test Sessions
+        </h3>
+        <div id="testsGrid">
+          <div class="empty-state">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem">⏱️</div>
+            <p>
+              No active tests. Start a load test to see real-time progress here.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class LoadTesterDashboard {
+        constructor() {
+          this.socket = null;
+          this.charts = {};
+          this.activeTests = new Map();
+          this.targets = new Map();
+          this.isConnected = false;
+          this.testConfigs = new Map();
+
+          this.initializeApplication();
+        }
+
+        async initializeApplication() {
+          this.initializeSocket();
+          this.initializeCharts();
+          this.setupEventListeners();
+          this.loadSavedConfig();
+          console.log("🚀 Dashboard initialized");
+        }
+
+        initializeSocket() {
+          try {
+            this.socket = io(window.WS_BASE || window.API_BASE || window.location.origin);
+
+            this.socket.on("connect", () => {
+              this.isConnected = true;
+              this.updateConnectionStatus("connected");
+              console.log("✅ Connected to load tester server");
+            });
+
+            this.socket.on("disconnect", () => {
+              this.isConnected = false;
+              this.updateConnectionStatus("disconnected");
+              console.log("❌ Disconnected from server");
+            });
+
+            this.socket.on("connect_error", (error) => {
+              console.log("🔄 Connection failed, retrying...", error);
+              this.updateConnectionStatus("disconnected");
+            });
+
+            this.socket.on("metrics_update", (data) => {
+              this.updateDashboard(data);
+            });
+
+            this.socket.on("test_update", (data) => {
+              this.handleTestUpdate(data);
+            });
+          } catch (error) {
+            console.error("Socket initialization error:", error);
+            this.updateConnectionStatus("disconnected");
+          }
+        }
+
+        updateConnectionStatus(status) {
+          const statusEl = document.getElementById("connectionStatus");
+          statusEl.className = `connection-status ${status}`;
+          statusEl.textContent =
+            status === "connected" ? "✅ Connected" : "❌ Disconnected";
+        }
+
+        // Target management
+        addTarget() {
+          const testType = document.getElementById("testType").value;
+          const targetUrl = document.getElementById("targetUrl").value.trim();
+          const method = document.getElementById("requestMethod").value;
+
+          if (!targetUrl) {
+            this.showNotification("Please enter a target URL", "error");
+            return;
+          }
+
+          // Basic URL validation
+          try {
+            new URL(targetUrl);
+          } catch (e) {
+            this.showNotification("Please enter a valid URL", "error");
+            return;
+          }
+
+          if (this.targets.has(targetUrl)) {
+            this.showNotification("This target is already added", "error");
+            return;
+          }
+
+          const target = {
+            id: Date.now().toString(),
+            url: targetUrl,
+            type: testType,
+            method: method,
+            addedAt: new Date().toISOString(),
+          };
+
+          this.targets.set(targetUrl, target);
+          this.renderTargets();
+          this.saveConfig();
+
+          // Clear inputs
+          document.getElementById("targetUrl").value = "";
+          this.showNotification(`✅ Target added: ${targetUrl}`, "success");
+        }
+
+        removeTarget(targetUrl) {
+          this.targets.delete(targetUrl);
+          this.renderTargets();
+          this.saveConfig();
+          this.showNotification("Target removed", "success");
+        }
+
+        renderTargets() {
+          const targetsList = document.getElementById("targetsList");
+          targetsList.innerHTML = "";
+
+          if (this.targets.size === 0) {
+            targetsList.innerHTML = `
+                        <div class="empty-state">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+                            <p>No targets added yet. Add a target URL to get started.</p>
+                        </div>
+                    `;
+            return;
+          }
+
+          this.targets.forEach((target, url) => {
+            const targetCard = document.createElement("div");
+            targetCard.className = "target-card";
+            targetCard.innerHTML = `
+                        <div class="target-info">
+                            <div class="target-url">${target.url}</div>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                <span class="target-type">${target.type}</span>
+                                <span class="target-type" style="background: #4299e1; color: white;">${target.method}</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="button danger" style="padding: 0.5rem 1rem; margin: 0;" onclick="dashboard.removeTarget('${url}')">
+                                🗑️ Remove
+                            </button>
+                        </div>
+                    `;
+            targetsList.appendChild(targetCard);
+          });
+        }
+
+        clearTargets() {
+          if (this.targets.size === 0) return;
+
+          if (confirm("Are you sure you want to clear all targets?")) {
+            this.targets.clear();
+            this.renderTargets();
+            this.saveConfig();
+            this.showNotification("All targets cleared", "success");
+          }
+        }
+
+        // Configuration management
+        saveConfig() {
+          const config = {
+            targets: Array.from(this.targets.values()),
+            workers: document.getElementById("workers").value,
+            duration: document.getElementById("duration").value,
+            rps: document.getElementById("rps").value,
+            rampUp: document.getElementById("rampUp").value,
+            rampDown: document.getElementById("rampDown").value,
+            timeout: document.getElementById("timeout").value,
+            useProxies: document.getElementById("useProxies").checked,
+            humanBehavior: document.getElementById("humanBehavior").checked,
+            browserMode: document.getElementById("browserMode").checked,
+            antiDetection: document.getElementById("antiDetection").checked,
+            enableRetries: document.getElementById("enableRetries").checked,
+            keepAlive: document.getElementById("keepAlive").checked,
+          };
+
+          localStorage.setItem("loadtester_config", JSON.stringify(config));
+        }
+
+        loadSavedConfig() {
+          try {
+            const saved = localStorage.getItem("loadtester_config");
+            if (!saved) return;
+
+            const config = JSON.parse(saved);
+
+            // Restore targets
+            if (config.targets) {
+              config.targets.forEach((target) => {
+                this.targets.set(target.url, target);
+              });
+              this.renderTargets();
+            }
+
+            // Restore form values
+            const fields = [
+              "workers",
+              "duration",
+              "rps",
+              "rampUp",
+              "rampDown",
+              "timeout",
+            ];
+            fields.forEach((field) => {
+              if (config[field]) {
+                document.getElementById(field).value = config[field];
+              }
+            });
+
+            // Restore checkboxes
+            const checkboxes = [
+              "useProxies",
+              "humanBehavior",
+              "browserMode",
+              "antiDetection",
+              "enableRetries",
+              "keepAlive",
+            ];
+            checkboxes.forEach((checkbox) => {
+              if (config.hasOwnProperty(checkbox)) {
+                document.getElementById(checkbox).checked = config[checkbox];
+              }
+            });
+          } catch (error) {
+            console.error("Error loading saved config:", error);
+          }
+        }
+
+        exportConfig() {
+          this.saveConfig();
+          const config = localStorage.getItem("loadtester_config");
+
+          const blob = new Blob([config], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `loadtest_config_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          this.showNotification("Configuration exported", "success");
+        }
+
+        importConfig() {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = ".json";
+          input.onchange = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const config = JSON.parse(e.target.result);
+                localStorage.setItem(
+                  "loadtester_config",
+                  JSON.stringify(config),
+                );
+                this.loadSavedConfig();
+                this.showNotification(
+                  "Configuration imported successfully",
+                  "success",
+                );
+              } catch (error) {
+                this.showNotification("Invalid configuration file", "error");
+              }
+            };
+            reader.readAsText(file);
+          };
+          input.click();
+        }
+
+        // Charts initialization
+        initializeCharts() {
+          const chartConfig = {
+            type: "line",
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: {
+                intersect: false,
+                mode: "index",
+              },
+              scales: {
+                x: {
+                  type: "time",
+                  time: {
+                    displayFormats: {
+                      second: "HH:mm:ss",
+                    },
+                  },
+                  title: {
+                    display: true,
+                    text: "Time",
+                  },
+                },
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Value",
+                  },
+                },
+              },
+              plugins: {
+                legend: {
+                  display: false,
+                },
+                tooltip: {
+                  backgroundColor: "rgba(0, 0, 0, 0.8)",
+                  titleColor: "#fff",
+                  bodyColor: "#fff",
+                },
+              },
+              elements: {
+                line: {
+                  tension: 0.4,
+                },
+                point: {
+                  radius: 3,
+                  hoverRadius: 6,
+                },
+              },
+            },
+          };
+
+          // RPS Chart
+          this.charts.rps = new Chart(document.getElementById("rpsChart"), {
+            ...chartConfig,
+            data: {
+              datasets: [
+                {
+                  label: "Requests/Second",
+                  data: [],
+                  borderColor: "#667eea",
+                  backgroundColor: "rgba(102, 126, 234, 0.1)",
+                  fill: true,
+                },
+              ],
+            },
+          });
+
+          // Response Time Chart
+          this.charts.responseTime = new Chart(
+            document.getElementById("responseTimeChart"),
+            {
+              ...chartConfig,
+              data: {
+                datasets: [
+                  {
+                    label: "Response Time (ms)",
+                    data: [],
+                    borderColor: "#48bb78",
+                    backgroundColor: "rgba(72, 187, 120, 0.1)",
+                    fill: true,
+                  },
+                ],
+              },
+            },
+          );
+
+          // Connections Chart
+          this.charts.connections = new Chart(
+            document.getElementById("connectionsChart"),
+            {
+              ...chartConfig,
+              data: {
+                datasets: [
+                  {
+                    label: "Active Connections",
+                    data: [],
+                    borderColor: "#ed8936",
+                    backgroundColor: "rgba(237, 137, 54, 0.1)",
+                    fill: true,
+                  },
+                ],
+              },
+            },
+          );
+
+          // System Chart
+          this.charts.system = new Chart(
+            document.getElementById("systemChart"),
+            {
+              ...chartConfig,
+              data: {
+                datasets: [
+                  {
+                    label: "CPU %",
+                    data: [],
+                    borderColor: "#f56565",
+                    backgroundColor: "rgba(245, 101, 101, 0.1)",
+                    fill: false,
+                  },
+                  {
+                    label: "Memory %",
+                    data: [],
+                    borderColor: "#9f7aea",
+                    backgroundColor: "rgba(159, 122, 234, 0.1)",
+                    fill: false,
+                  },
+                ],
+              },
+              options: {
+                ...chartConfig.options,
+                plugins: {
+                  legend: {
+                    display: true,
+                  },
+                },
+              },
+            },
+          );
+        }
+
+        setupEventListeners() {
+          // Test type change handler
+          document
+            .getElementById("testType")
+            .addEventListener("change", (e) => {
+              this.updateTestTypeFields(e.target.value);
+            });
+
+          // Auto-save config on input changes
+          const autoSaveInputs = [
+            "workers",
+            "duration",
+            "rps",
+            "rampUp",
+            "rampDown",
+            "timeout",
+          ];
+          autoSaveInputs.forEach((id) => {
+            document
+              .getElementById(id)
+              .addEventListener("change", () => this.saveConfig());
+          });
+
+          const autoSaveCheckboxes = [
+            "useProxies",
+            "humanBehavior",
+            "browserMode",
+            "antiDetection",
+            "enableRetries",
+            "keepAlive",
+          ];
+          autoSaveCheckboxes.forEach((id) => {
+            document
+              .getElementById(id)
+              .addEventListener("change", () => this.saveConfig());
+          });
+
+          // Enter key handler for target URL input
+          document
+            .getElementById("targetUrl")
+            .addEventListener("keypress", (e) => {
+              if (e.key === "Enter") {
+                this.addTarget();
+              }
+            });
+        }
+
+        updateTestTypeFields(testType) {
+          const urlField = document.getElementById("targetUrl");
+
+          switch (testType) {
+            case "websocket":
+              urlField.placeholder = "ws://example.com:8080/ws";
+              break;
+            case "graphql":
+              urlField.placeholder = "https://api.example.com/graphql";
+              break;
+            case "grpc":
+              urlField.placeholder = "grpc://example.com:50051";
+              break;
+            case "browser":
+              urlField.placeholder = "https://example.com";
+              break;
+            default:
+              urlField.placeholder = "https://api.example.com/endpoint";
+          }
+        }
+
+        // Enhanced test starting with multiple configurations
+        async startMultipleTests() {
+          if (this.targets.size === 0) {
+            this.showNotification(
+              "Please add at least one target URL",
+              "error",
+            );
+            return;
+          }
+
+          if (!this.isConnected) {
+            this.showNotification(
+              "Not connected to server. Please check if the server is running.",
+              "error",
+            );
+            return;
+          }
+
+          // Collect configuration
+          const baseConfig = {
+            workers: parseInt(document.getElementById("workers").value),
+            duration: parseInt(document.getElementById("duration").value),
+            requestsPerSecond: parseInt(document.getElementById("rps").value),
+            rampUpTime: parseInt(document.getElementById("rampUp").value),
+            rampDownTime: parseInt(document.getElementById("rampDown").value),
+            timeout: parseInt(document.getElementById("timeout").value) * 1000, // Convert to milliseconds
+            useProxies: document.getElementById("useProxies").checked,
+            humanBehavior: document.getElementById("humanBehavior").checked,
+            browserMode: document.getElementById("browserMode").checked,
+            antiDetection: document.getElementById("antiDetection").checked,
+            enableRetries: document.getElementById("enableRetries").checked,
+            keepAlive: document.getElementById("keepAlive").checked,
+          };
+
+          this.showNotification(
+            `🚀 Starting tests for ${this.targets.size} target(s)...`,
+            "info",
+            3000,
+          );
+
+          try {
+            // Start individual tests for each target
+            const promises = Array.from(this.targets.values()).map(
+              async (target) => {
+                const testConfig = {
+                  ...baseConfig,
+                  url: target.url,
+                  method: target.method,
+                  targets: [target.url],
+                  testType: target.type,
+                  targetUrl: target.url,
+                };
+
+                // Choose appropriate endpoint based on test type
+                let endpoint = "/api/v1/load-test/start";
+
+                switch (target.type) {
+                  case "websocket":
+                    endpoint = "/api/v1/websocket-test/start";
+                    testConfig.connections = baseConfig.workers;
+                    break;
+                  case "graphql":
+                    endpoint = "/api/v1/graphql-test/start";
+                    testConfig.endpoint = target.url;
+                    testConfig.queries = [{ query: "{ __typename }" }];
+                    break;
+                  case "grpc":
+                    endpoint = "/api/v1/grpc-test/start";
+                    testConfig.address = target.url;
+                    break;
+                  case "browser":
+                    endpoint = "/api/v1/browser-test/start";
+                    testConfig.scenarios = [
+                      {
+                        steps: [{ type: "navigate", url: target.url }],
+                      },
+                    ];
+                    break;
+                }
+
+                const response = await fetch(
+                  `${(window.API_BASE || window.location.origin)}${endpoint}`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(testConfig),
+                  },
+                );
+
+                const result = await response.json();
+
+                if (result.testId) {
+                  this.testConfigs.set(result.testId, testConfig);
+                }
+
+                return {
+                  ...result,
+                  targetUrl: target.url,
+                  targetType: target.type,
+                };
+              },
+            );
+
+            const results = await Promise.all(promises);
+
+            let successCount = 0;
+            let errors = [];
+
+            results.forEach((result) => {
+              if (result.testId) {
+                successCount++;
+                console.log(
+                  `✅ Test started for ${result.targetUrl}:`,
+                  result.testId,
+                );
+              } else {
+                errors.push(
+                  `${result.targetUrl}: ${result.error || "Unknown error"}`,
+                );
+              }
+            });
+
+            if (successCount > 0) {
+              this.showNotification(
+                `✅ Started ${successCount} test(s) successfully!`,
+                "success",
+              );
+              this.updateTestsDisplay();
+            }
+
+            if (errors.length > 0) {
+              this.showNotification(
+                `❌ Some tests failed:\n${errors.join("\n")}`,
+                "error",
+                8000,
+              );
+            }
+          } catch (error) {
+            this.showNotification(
+              `❌ Error starting tests: ${error.message}`,
+              "error",
+            );
+            console.error("Test start error:", error);
+          }
+        }
+
+        updateTestsDisplay() {
+          const testsGrid = document.getElementById("testsGrid");
+
+          if (this.activeTests.size === 0) {
+            testsGrid.innerHTML = `
+                        <div class="empty-state">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏱️</div>
+                            <p>No active tests. Start a load test to see real-time progress here.</p>
+                        </div>
+                    `;
+            return;
+          }
+
+          // Will be updated by real-time metrics
+        }
+
+        updateDashboard(data) {
+          // Update overall metrics
+          document.getElementById("activeTests").textContent =
+            data.overall?.activeTests || 0;
+          document.getElementById("totalRequests").textContent = (
+            data.overall?.totalRequests || 0
+          ).toLocaleString();
+          document.getElementById("avgResponseTime").textContent = Math.round(
+            data.overall?.averageResponseTime || 0,
+          );
+          document.getElementById("errorRate").textContent =
+            (data.overall?.errorRate || 0).toFixed(1) + "%";
+
+          // Update charts with real-time data
+          const timestamp = new Date(data.timestamp);
+          this.updateCharts(data, timestamp);
+
+          // Update test cards
+          if (data.tests) {
+            this.updateTestCards(data.tests);
+          }
+        }
+
+        updateCharts(data, timestamp) {
+          // Calculate aggregate metrics for charts
+          let totalRPS = 0;
+          let totalResponseTime = 0;
+          let totalConnections = 0;
+          let activeTestCount = 0;
+
+          if (data.tests) {
+            for (const testId in data.tests) {
+              const test = data.tests[testId];
+              if (test.status === "running") {
+                totalRPS += test.metrics?.currentRPS || 0;
+                totalResponseTime += test.metrics?.averageResponseTime || 0;
+                totalConnections += test.metrics?.activeConnections || 0;
+                activeTestCount++;
+              }
+            }
+          }
+
+          const avgResponseTime =
+            activeTestCount > 0 ? totalResponseTime / activeTestCount : 0;
+
+          // Update chart data
+          this.addChartData(this.charts.rps, timestamp, totalRPS);
+          this.addChartData(
+            this.charts.responseTime,
+            timestamp,
+            avgResponseTime,
+          );
+          this.addChartData(
+            this.charts.connections,
+            timestamp,
+            totalConnections,
+          );
+
+          // Update system chart
+          if (data.system) {
+            this.addChartData(
+              this.charts.system,
+              timestamp,
+              data.system.cpu || 0,
+              0,
+            );
+            this.addChartData(
+              this.charts.system,
+              timestamp,
+              data.system.memory || 0,
+              1,
+            );
+          }
+        }
+
+        addChartData(chart, timestamp, value, datasetIndex = 0) {
+          const dataset = chart.data.datasets[datasetIndex];
+          dataset.data.push({
+            x: timestamp,
+            y: value,
+          });
+
+          // Keep only last 50 data points for performance
+          if (dataset.data.length > 50) {
+            dataset.data.shift();
+          }
+
+          chart.update("none");
+        }
+
+        updateTestCards(tests) {
+          const testsGrid = document.getElementById("testsGrid");
+
+          // Clear existing cards if no tests
+          if (!tests || Object.keys(tests).length === 0) {
+            testsGrid.innerHTML = `
+                        <div class="empty-state">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏱️</div>
+                            <p>No active tests. Start a load test to see real-time progress here.</p>
+                        </div>
+                    `;
+            return;
+          }
+
+          // Update existing cards or create new ones
+          testsGrid.innerHTML = ""; // Clear for simplicity, could be optimized
+
+          for (const testId in tests) {
+            const test = tests[testId];
+            const card = this.createTestCard(test);
+            testsGrid.appendChild(card);
+          }
+        }
+
+        createTestCard(test) {
+          const card = document.createElement("div");
+          card.className = `test-card ${test.status}`;
+
+          const duration = Math.round((Date.now() - test.startTime) / 1000);
+          const configDuration = this.getTestConfigDuration(test.id) || 60;
+          const progressPercent = Math.min(
+            (duration / configDuration) * 100,
+            100,
+          );
+
+          const targetUrl = this.getTestTargetUrl(test.id) || "Unknown Target";
+          const estimatedTotal = this.getEstimatedTotalRequests(test.id);
+          const requestProgress =
+            estimatedTotal > 0
+              ? (test.metrics?.requests / estimatedTotal) * 100
+              : 0;
+
+          card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <span class="status-indicator status-${test.status}"></span>
+                            <strong>${test.id.substring(0, 8)}...</strong>
+                            <span style="margin-left: 1rem; padding: 0.25rem 0.5rem; background: #e2e8f0; border-radius: 4px; font-size: 0.75rem;">
+                                ${test.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <button class="button danger" style="padding: 0.5rem 1rem; margin: 0;" onclick="dashboard.stopTest('${test.id}')" 
+                                ${test.status !== "running" ? "disabled" : ""}>
+                            ⏹️ Stop
+                        </button>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Target:</strong> ${targetUrl}<br>
+                        <strong>Duration:</strong> ${duration}s / ${configDuration}s
+                    </div>
+                    
+                    <!-- Time Progress -->
+                    <div style="margin: 1rem 0;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.9rem; color: #718096;">Time Progress</span>
+                            <span style="font-size: 0.9rem; color: #718096;">${progressPercent.toFixed(1)}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${test.status === "running" ? "pulsing" : ""}" 
+                                 style="width: ${progressPercent}%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Request Progress -->
+                    ${
+                      estimatedTotal > 0
+                        ? `
+                    <div style="margin: 1rem 0;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.9rem; color: #718096;">Requests</span>
+                            <span style="font-size: 0.9rem; color: #718096;">${(test.metrics?.requests || 0).toLocaleString()} / ${estimatedTotal.toLocaleString()}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${Math.min(requestProgress, 100)}%; background: linear-gradient(90deg, #4299e1, #3182ce);"></div>
+                        </div>
+                    </div>
+                    `
+                        : ""
+                    }
+                    
+                    <!-- Metrics Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #667eea;">${(test.metrics?.requests || 0).toLocaleString()}</div>
+                            <div style="font-size: 0.8rem; color: #718096;">REQUESTS</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #48bb78;">${Math.round(test.metrics?.currentRPS || 0)}</div>
+                            <div style="font-size: 0.8rem; color: #718096;">RPS</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: #ed8936;">${Math.round(test.metrics?.averageResponseTime || 0)}</div>
+                            <div style="font-size: 0.8rem; color: #718096;">AVG MS</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: bold; color: ${(test.metrics?.errorRate || 0) > 5 ? "#f56565" : "#48bb78"};">${(test.metrics?.errorRate || 0).toFixed(1)}%</div>
+                            <div style="font-size: 0.8rem; color: #718096;">ERRORS</div>
+                        </div>
+                    </div>
+                `;
+
+          return card;
+        }
+
+        // Helper methods
+        getTestConfigDuration(testId) {
+          return (
+            this.testConfigs?.get(testId)?.duration ||
+            parseInt(document.getElementById("duration").value) ||
+            60
+          );
+        }
+
+        getTestTargetUrl(testId) {
+          return this.testConfigs?.get(testId)?.targetUrl || "Unknown Target";
+        }
+
+        getEstimatedTotalRequests(testId) {
+          const config = this.testConfigs?.get(testId);
+          if (!config) return 0;
+          return Math.round(config.duration * config.requestsPerSecond);
+        }
+
+        async stopTest(testId) {
+          try {
+            const response = await fetch(
+              `${(window.API_BASE || window.location.origin)}/api/v1/load-test/stop`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ testId }),
+              },
+            );
+
+            const result = await response.json();
+            console.log("Test stopped:", result);
+            this.showNotification("Test stopped successfully", "success");
+          } catch (error) {
+            this.showNotification(
+              "Error stopping test: " + error.message,
+              "error",
+            );
+          }
+        }
+
+        async stopAllTests() {
+          if (confirm("Are you sure you want to stop all running tests?")) {
+            try {
+              const response = await fetch(
+                `${(window.API_BASE || window.location.origin)}/api/v1/load-test/stop-all`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                },
+              );
+
+              this.showNotification("All tests stopped", "success");
+              this.updateTestsDisplay();
+            } catch (error) {
+              this.showNotification(
+                "Error stopping all tests: " + error.message,
+                "error",
+              );
+            }
+          }
+        }
+
+        handleTestUpdate(data) {
+          console.log("Test update:", data);
+        }
+
+        showNotification(message, type = "success", duration = 5000) {
+          const notification = document.createElement("div");
+          notification.className = `notification ${type}`;
+          notification.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>${message}</span>
+                        <button onclick="this.parentElement.parentElement.remove()" 
+                                style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #718096;">×</button>
+                    </div>
+                `;
+
+          document.body.appendChild(notification);
+
+          setTimeout(() => notification.classList.add("show"), 100);
+
+          setTimeout(() => {
+            notification.classList.remove("show");
+            setTimeout(() => notification.remove(), 300);
+          }, duration);
+        }
+      }
+
+      // Global functions
+      function addTarget() {
+        dashboard.addTarget();
+      }
+
+      function startMultipleTests() {
+        dashboard.startMultipleTests();
+      }
+
+      function stopAllTests() {
+        dashboard.stopAllTests();
+      }
+
+      function clearTargets() {
+        dashboard.clearTargets();
+      }
+
+      function exportConfig() {
+        dashboard.exportConfig();
+      }
+
+      function importConfig() {
+        dashboard.importConfig();
+      }
+
+      // Initialize dashboard
+      let dashboard;
+      document.addEventListener("DOMContentLoaded", () => {
+        dashboard = new LoadTesterDashboard();
+      });
+    </script>
+  </body>
+</html>

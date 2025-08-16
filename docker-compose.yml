@@ -1,0 +1,18 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    image: advanced-load-tester:latest
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+  # Comma-separated list of allowed origins for CORS/Socket.IO
+  # e.g., https://your-vercel-app.vercel.app,https://your-user.github.io
+  - ALLOWED_ORIGINS=
+    ports:
+      - "3000:3000"
+      - "5001:5001" # Python bridge
+    volumes:
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+    restart: unless-stopped

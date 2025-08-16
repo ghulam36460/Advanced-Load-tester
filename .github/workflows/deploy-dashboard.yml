@@ -1,0 +1,57 @@
+name: Deploy Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/deploy-dashboard.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Generate dashboard config
+        run: |
+          npm ci --omit=dev
+          node scripts/write-dashboard-config.js
+        env:
+          DASHBOARD_API_BASE: ${{ vars.DASHBOARD_API_BASE }}
+          DASHBOARD_WS_BASE: ${{ vars.DASHBOARD_WS_BASE }}
+    # If you set repository Variables named DASHBOARD_API_BASE / DASHBOARD_WS_BASE,
+    # GitHub will expose them as environment variables automatically when configured
+    # at the Environment level. The script defaults to empty strings if not set.
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dashboard
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,92 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.tmp/
+.cache/
+dist/
+build/
+coverage/
+docs/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Logs and reports
+*.log
+logs/
+reports/
+# Audit and generated reports
+AUDIT_REPORT.md
+validation_report.json
+
+# Databases and coverage artifacts
+*.db
+*.sqlite
+.coverage
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.pytype/
+env/
+venv/
+.venv/
+.env
+.python-version
+
+# Project-specific
+advanced_loadtester.log
+
+# Tests (ignore untracked tests; tracked files remain)
+test_*.js
+*.test.js
+*.spec.js
+tests/
+
+# Misc local artifacts
+tmp/
+*.tmp
+*.bak
+*.old
+
+# Coverage reports (explicit patterns)
+coverage/lcov-report/
+coverage/advanced_loadtester/
+coverage/lcov.info
+coverage/**/*.html
+coverage/**/*.css
+coverage/**/*.js
+coverage/**/*.png
+coverage/**/*.svg
+
+# Local scripts (keep tracked files; this ignores new local-only scripts)
+*.bat
+*.cmd
+*.ps1
+*.psm1
+*.sh
+
+# Extra log/artifact patterns
+*.out
+*.err
+*.trace
+*.pid
+nohup.out
+
+# Common duplicate filename patterns (Windows/macOS)
+* - Copy*
+* (Copy)*
+* (1)*
+* (2)*
+* (3)*
+Copy of *
